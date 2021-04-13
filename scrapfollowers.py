@@ -1,22 +1,30 @@
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
 from time import sleep
 
 
 class ScrapFollowers:
     """
-    path = path of the chrome webdriver
+    <str> path = path of the chrome webdriver
+    <str> username = username of the account as you want to be connected
+    <str> password = password of the account as you want to be connected
+    <str> target = the account that you want to scrap followers
+    <int> number_followers = number of followers you want to scrap (please don't abuse)
+    <bool> headless = headless or not
     """
-    def __init__(self, path, username, password, target, number_followers):
+    def __init__(self, path, username, password, target, number_followers, headless):
         # PRIVATE
         self.__options = webdriver.ChromeOptions()
+        self.__headless = headless
         self.__mobile_emulation = {
             "userAgent": "Mozilla/5.0 (Linux; Android 4.2.1; en-us; Nexus 5 Build/JOP40D) AppleWebKit/"
                          + "535.19 (KHTML, like Gecko) Chrome/18.0.1025.166 Mobile Safari/535.19"
         }
         self.__options.add_experimental_option("mobileEmulation", self.__mobile_emulation)
+        if self.__headless:
+            self.__options.add_argument("--headless")
         self.__driver_path = path
         self.__driver = webdriver.Chrome(executable_path=self.__driver_path, options=self.__options)
+        self.__driver.set_window_size(200, 800)
         self.__username = username
         self.__password = password
         # PUBLIC
@@ -67,8 +75,9 @@ class ScrapFollowers:
     def __later(self):
         self.__driver.find_element_by_xpath('//*[@id="react-root"]/section/main/div/div/section/div/button').click()
         sleep(7)
-        self.__driver.find_element_by_xpath('/html/body/div[4]/div/div/div/div[3]/button[2]').click()
-        sleep(2)
+        if not self.__headless:
+            self.__driver.find_element_by_xpath('/html/body/div[4]/div/div/div/div[3]/button[2]').click()
+            sleep(2)
 
     """
     private
@@ -87,6 +96,7 @@ class ScrapFollowers:
             self.target)
         sleep(2)
         self.__driver.find_element_by_xpath('//*[@id="react-root"]/section/main/div/div/ul/li[1]/a').click()
+        sleep(5)
 
     """
     private
@@ -95,15 +105,22 @@ class ScrapFollowers:
     1: click on the followers button
     """
     def __followers(self):
-        self.__driver.find_element_by_xpath(
-            '//*[@id="react-root"]/section/main/div/header/section/ul/li[2]/a'
-        ).click()
+        self.__driver.find_element_by_css_selector(
+            '#react-root > section > main > div > ul > li:nth-child(2) > a').click()
         sleep(2)
 
     """
+    private
+    This method scroll the followers section of the target to generate the followers profiles
+    1: set scroll to 0
+    2: add + 800 to the scroll Y position 
     """
     def __load_followers(self):
-        self.__driver.execute_script("window.scrollTo(0, 500)")
+        scroll = 0
+        for i in range(self.number_followers):
+            scroll += 800
+            self.__driver.execute_script("window.scrollTo(0, " + str(scroll) + ")")
+            sleep(1)
 
     """
     private
@@ -112,9 +129,15 @@ class ScrapFollowers:
     def __get_followers(self):
         for i in range(self.number_followers + 1):
             self.followers_list.append(self.__driver.find_element_by_xpath(
-                "/html/body/div[5]/div/div/div[2]/ul/div/li[" + str(i+1) + "]/div/div[2]/div[1]/div/div/span/a"
+                '//*[@id="react-root"]/section/main/div/ul/div/li[' + str(i+1) + ']/div/div[1]/div[2]/div[1]/a'
             ).text)
 
+    """
+    """
+    def __write(self):
+        with open("followers.txt", "w") as file:
+            for i in range(len(self.followers_list)):
+                file.write(str(i+1) + " - " + str(self.followers_list[i]) + "\n")
     """
     ==========================================
     = Second rank methods ====================
@@ -122,13 +145,28 @@ class ScrapFollowers:
     """
 
     """
-        private
-        this method use three others privates methods to complete the connexxion on instagram
-        """
+    private
+    this method use three others privates methods to complete the connexxion on instagram
+    """
     def __access_instagram(self):
+        print("Connecting to instagram ...")
         self.__connect()
         self.__login()
         self.__later()
+        print("Connexion successfull ! ")
+
+    """
+    private
+    This method use four others privates methods to scrap followers in a list
+    """
+    def __access_followers(self):
+        self.__search()
+        self.__followers()
+        print("Loading followers ...")
+        self.__load_followers()
+        print("Scraping the data ...")
+        self.__get_followers()
+        print("Finish")
 
     """
     ==========================================
@@ -142,7 +180,5 @@ class ScrapFollowers:
     """
     def scrapfollowers(self):
         self.__access_instagram()
-        self.__search()
-        self.__followers()
-        self.__load_followers()
-        self.__get_followers()
+        self.__access_followers()
+        self.__write()
